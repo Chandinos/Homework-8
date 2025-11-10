@@ -212,3 +212,67 @@ prop.table(table(TestData$Seasons))
 
 
 ## Fitting MLR Models
+
+### Recipe 1
+```{r}
+#Creating Weekday/Weekend Factor Variable // Normalizing Numeric Variables // Creating Dummy Variables
+Recipe1 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
+  #Extracting day of the week
+  step_date(Date, features = "dow", label = TRUE) |>
+  #Creating the weekday/weekend variable
+  step_mutate(
+    DayType = factor(if_else(Date_dow %in% c("Sat", "Sun"), "Weekend", "Weekday"))
+  ) |>
+  #Removing Date and intermediate variable
+  step_rm(Date, Date_dow) |>
+  #Removing columns that have no variation (these columns contribute nothing to the upcoming models)
+  step_zv(all_predictors()) |>
+  #Normalizing the predictors (mean = 0, standard deviation = 1)
+  step_normalize(all_numeric_predictors()) |>
+  #Create dummy variables for Seasons, Holiday, and DayType
+  step_dummy(all_of(c("Seasons", "Holiday", "DayType")), one_hot = TRUE)
+
+#Prepping and Baking
+Recipe1_Prep <- prep(Recipe1)
+TrainingProcessed <- bake(Recipe1_Prep, new_data = TrainingData)
+TestingProcessed <- bake(Recipe1_Prep, new_data = TestData)
+
+#Quick Visual Check of Variables (No Date column // Dummy variables created // Numeric variables standardized)
+glimpse(TrainingProcessed)
+glimpse(TestingProcessed)
+```
+
+### Recipe 2: Same as above + interactions between seasons & holidays, seasons and temp, temp & rainfall.
+```{r}
+#Same Recipe as above
+
+#Same Manipulations as Recipe 1
+Recipe2 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
+  step_date(Date, features = "dow", label = TRUE) |>
+  step_mutate(
+    DayType = factor(if_else(Date_dow %in% c("Sat", "Sun"), "Weekend", "Weekday"))
+  ) |>
+  step_rm(Date, Date_dow) |>
+  step_zv(all_predictors()) |>
+  step_normalize(all_numeric_predictors()) |>
+  step_dummy(all_of(c("Seasons", "Holiday", "DayType")), one_hot = TRUE) |>
+
+#Creating desired interactions
+
+  #Seasons & Holidays
+  step_interact(~ starts_with("Seasons_"):starts_with("Holiday_")) |>
+  #Seasons & Temperature
+  step_interact(~ starts_with("Seasons_"):MeanTempC) |>
+  #Temperature & Rainfall
+  step_interact(~MeanTempC:TotalRainfallMm)
+  
+#Prepping and Baking
+Recipe2_Prep <- prep(Recipe2)
+TrainingProcessed2 <- bake(Recipe2_Prep, new_data = TrainingData)
+TestingProcessed2 <- bake(Recipe2_Prep, new_data = TestData)
+
+#Quick visual check of interaction columns
+TrainingProcessed2 |> select(matches("_x_")) |> glimpse()
+TestingProcessed2 |> select(matches("_x_")) |> glimpse()
+```
+
