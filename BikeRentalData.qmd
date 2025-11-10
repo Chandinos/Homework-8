@@ -213,7 +213,7 @@ prop.table(table(TestData$Seasons))
 
 ## Fitting MLR Models
 
-### Recipe 1
+### Recipe1: Creating Weekday/Weekend variable (factor), Normalizing Numeric Variables, Creating Dummy Variables
 ```{r}
 #Creating Weekday/Weekend Factor Variable // Normalizing Numeric Variables // Creating Dummy Variables
 Recipe1 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
@@ -230,7 +230,7 @@ Recipe1 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
   #Normalizing the predictors (mean = 0, standard deviation = 1)
   step_normalize(all_numeric_predictors()) |>
   #Create dummy variables for Seasons, Holiday, and DayType
-  step_dummy(all_of(c("Seasons", "Holiday", "DayType")), one_hot = TRUE)
+  step_dummy(all_of(c("Seasons", "Holiday", "DayType")))
 
 #Prepping and Baking
 Recipe1_Prep <- prep(Recipe1)
@@ -242,7 +242,7 @@ glimpse(TrainingProcessed)
 glimpse(TestingProcessed)
 ```
 
-### Recipe 2: Same as Recipe 1 + interactions between seasons & holidays, seasons and temp, temp & rainfall.
+### Recipe2: Same as Recipe 1 + interactions between seasons & holidays, seasons and temp, temp & rainfall.
 ```{r}
 #Same Manipulations as Recipe 1
 Recipe2 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
@@ -253,7 +253,7 @@ Recipe2 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
   step_rm(Date, Date_dow) |>
   step_zv(all_predictors()) |>
   step_normalize(all_numeric_predictors()) |>
-  step_dummy(all_of(c("Seasons", "Holiday", "DayType")), one_hot = TRUE) |>
+  step_dummy(all_of(c("Seasons", "Holiday", "DayType"))) |>
 
 #Creating desired interactions
 
@@ -263,7 +263,9 @@ Recipe2 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
   #Seasons & Temperature
   step_interact(~matches("^Seasons_(Autumn|Spring|Summer|Winter)$"):MeanTempC) |>
   #Temperature & Rainfall
-  step_interact(~MeanTempC:TotalRainfallMm)
+  step_interact(~MeanTempC:TotalRainfallMm) |>
+  #Eliminating all unnecessary linear combinations
+  step_lincomb(all_numeric_predictors())
   
 #Prepping and Baking
 Recipe2_Prep <- prep(Recipe2)
@@ -275,7 +277,7 @@ TrainingProcessed2 |> select(matches("_x_")) |> glimpse()
 TestingProcessed2 |> select(matches("_x_")) |> glimpse()
 ```
 
-## Recipe 3: Same as Recipe 2 + adding in quadratic terms for each numeric predictor
+### Recipe3: Same as Recipe 2 + adding in quadratic terms for each numeric predictor
 ```{r}
 #Same as Recipe 2
 Recipe3 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
@@ -286,7 +288,8 @@ Recipe3 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
   step_rm(Date, Date_dow) |>
   step_zv(all_predictors()) |>
   step_normalize(all_numeric_predictors()) |>
-  step_dummy(all_of(c("Seasons", "Holiday", "DayType")), one_hot = TRUE) |>
+  step_dummy(all_of(c("Seasons", "Holiday", "DayType"))) |>
+  step_lincomb(all_numeric_predictors())
   step_interact(~matches("^Seasons_(Autumn|Spring|Summer|Winter)$")
                 : matches("^Holiday_(Holiday|No\\.Holiday)$"))  |>
   step_interact(~matches("^Seasons_(Autumn|Spring|Summer|Winter)$"):MeanTempC) |>
@@ -300,7 +303,8 @@ Recipe3 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
     degree = 2,
     options = list(raw = TRUE),
     keep_original_cols = TRUE
-  )
+  ) |>
+    step_lincomb(all_numeric_predictors())
   
 #Prepping and Baking
 Recipe3_Prep <- prep(Recipe3)
@@ -310,5 +314,25 @@ TestingProcessed3 <- bake(Recipe3_Prep, new_data = TestData)
 #Quick visual check for quadratic terms
 glimpse(TrainingProcessed3)
 glimpse(TestingProcessed3)
+```
+
+## Model Fit
+```{r}
+#Ensuring reproducibility
+set.seed(1234)
+
+#Defining what model to fit and what engine to use
+ModelSpec <- linear_reg() |> set_engine("lm")
+
+#Recipe 1 workflow
+Wf1 <- workflow() |> add_model(ModelSpec) |> add_recipe(Recipe1)
+
+#Recipe 1 cross-validation
+results1 <- fit_resamples(
+  Wf1, 
+  resamples = CvFolds, 
+  metrics = metric_set(rmse, rsq), 
+  control = control_resamples(save_pred = TRUE)
+  )ok 
 ```
 
