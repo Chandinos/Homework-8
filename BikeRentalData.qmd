@@ -8,6 +8,7 @@ editor: visual
 library(tidyverse)
 library(janitor)
 library(lubridate)
+library(tidymodels)
 ```
 
 ## Reading in Data
@@ -156,7 +157,6 @@ ggplot(DailyData, aes(x = MeanHumidityPercent, y = TotalBikeCount)) + geom_point
        x = "Mean Daily Humidity(%)",
        y = "Total Daily Bike Rentals")
 ```
-
 This plot shows that there is not a strong relationship between humidity and daily bike rentals. The correlation is 0.04 along with the scatterplot leads up to conclude that humidity alone is not a driving force of consumer bike rental behavior.
 
 ```{r}
@@ -166,5 +166,49 @@ ggplot(DailyData, aes(x = Date, y = TotalBikeCount, color = Seasons)) + geom_lin
        x = "Date",
        y = "Total Daily Bike Rentals")
 ```
-
 In the figure above, the daily trend over time shows rentals are low in the wintertime and then steadily increases through the spring into the summer. There is a small decline in late summer/early fall with a brief rebound in September/October before tapering off as winter approaches. Although there are clear fluctuations present, the overall trend is low bike rentals over the cold periods of the year and peak bike rentals occuring in the warm periods of the year.
+
+```{r}
+#Holiday vs Non-Holiday Bike Rentals
+ggplot(DailyData, aes(x = Holiday, y = TotalBikeCount, fill = Holiday)) + geom_boxplot(aplha = 0.5) +
+  labs(title = "Holiday vs Non-Holiday Bike Rentals",
+       x = "Holiday Status",
+       y = "Total Daily Bike Rentals")
+```
+From the boxplot above, we can see that there are noticeably less bike rentals on holidays than on days that are not considered holidays.
+
+```{r}
+#Temperature vs Rentals (Colored by Season)
+ggplot(DailyData, aes(x = MeanTempC, y = TotalBikeCount, color = Seasons)) + geom_point(alpha = 0.5) +
+  labs(title = "Temperature vs Bike Rentals (Colored by Season)",
+       x = "Mean Daily Temperature (Celsius)",
+       y = "Total Daily Bike Rentals",
+       color = "Season")
+```
+The figure above displays a positive relationship between temperature and rentals. The higher the temperature, the more bike rentals there are. Summer has the most rentals but it appears as it gets extremely hot, the rentals decline. Overall, warmer months promote more people to rent bikes and colder months have lower demand for bike rentals.
+
+## Split the Data
+
+```{r}
+#For reproducibility
+set.seed(1234)
+
+#Split Data 75/25 (Stratified by Seasons)
+DailyDataSplit <- initial_split(DailyData, prop = 0.75, strata = Seasons)
+TrainingData <- training(DailyDataSplit)
+TestData <- testing(DailyDataSplit)
+
+#Checking Overall Ratio
+nrow(TrainingData) / nrow(DailyData)
+nrow(TestData) / nrow(DailyData)
+
+#10-fold CV split
+CvFolds <- vfold_cv(TrainingData, v = 10, strata = Seasons)
+
+#Checking the split balance for Training Data and Testing Data
+prop.table(table(TrainingData$Seasons))
+prop.table(table(TestData$Seasons))
+```
+
+
+## Fitting MLR Models
