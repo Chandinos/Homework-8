@@ -289,7 +289,6 @@ Recipe3 <- recipe(TotalBikeCount ~ ., data = TrainingData) |>
   step_zv(all_predictors()) |>
   step_normalize(all_numeric_predictors()) |>
   step_dummy(all_of(c("Seasons", "Holiday", "DayType"))) |>
-  step_lincomb(all_numeric_predictors())
   step_interact(~matches("^Seasons_(Autumn|Spring|Summer|Winter)$")
                 : matches("^Holiday_(Holiday|No\\.Holiday)$"))  |>
   step_interact(~matches("^Seasons_(Autumn|Spring|Summer|Winter)$"):MeanTempC) |>
@@ -324,15 +323,51 @@ set.seed(1234)
 #Defining what model to fit and what engine to use
 ModelSpec <- linear_reg() |> set_engine("lm")
 
-#Recipe 1 workflow
+#Recipe 1 workflow and cross-validation
 Wf1 <- workflow() |> add_model(ModelSpec) |> add_recipe(Recipe1)
 
-#Recipe 1 cross-validation
-results1 <- fit_resamples(
+Results1 <- fit_resamples(
   Wf1, 
   resamples = CvFolds, 
   metrics = metric_set(rmse, rsq), 
-  control = control_resamples(save_pred = TRUE)
-  )ok 
-```
+  control = control_resamples(save_pred = TRUE))
+  
+#Recipe 2 workflow and cross-validation
+Wf2 <- workflow() |> add_model(ModelSpec) |> add_recipe(Recipe2)
 
+Results2 <- fit_resamples(
+  Wf2, 
+  resamples = CvFolds, 
+  metrics = metric_set(rmse, rsq), 
+  control = control_resamples(save_pred = TRUE)
+  )
+
+#Recipe 3 workflow and cross-validation
+Wf3 <- workflow() |> add_model(ModelSpec) |> add_recipe(Recipe3)
+
+Results3 <- fit_resamples(
+  Wf3, 
+  resamples = CvFolds, 
+  metrics = metric_set(rmse, rsq), 
+  control = control_resamples(save_pred = TRUE)
+  )
+
+#Compare the 3 models
+bind_rows(
+  Results1 = collect_metrics(Results1),
+  Results2 = collect_metrics(Results2),
+  Results3 = collect_metrics(Results3),
+  .id = "Recipe"
+)
+
+
+#Final Fit
+FinalFit <- last_fit(Wf2, DailyDataSplit)
+collect_metrics(FinalFit)
+
+#Extract coefficients
+FinalModel <- extract_fit_parsnip(FinalFit)
+tidy(FinalModel)
+
+```
+**The 10-fold cross-validation shows that Recipe 3 was the best model to choose as the final given it had the lowest RMSE (2768) and highest R-Squared (0.925). The recipe that contains both the interactions as well as the squared terms had the best predictive accuracy of the three recipes. When the interactions were included in the model, there wasa big increase in predictive accuracy (Recipe 1: RMSE = 3895 / RSq = 0.850 vs Recipe 2: RMSE = 0.922 / RSq = 0.922). Although it appears insignificant, the accuracy of the model further improved when the quadratic terms were introduced. [Recipe 3 > Recipe 2 > Recipe 1 (in terms of predictive accuracy)]**
