@@ -12,6 +12,8 @@ library(tidymodels)
 library(glmnet)
 library(rpart.plot)
 library(vip)
+library(baguette)
+library(ranger)
 ```
 
 ## Homework 8
@@ -423,6 +425,7 @@ FinalLassoFit <- last_fit(
 
 collect_metrics(FinalLassoFit)
 
+#Extra Final Lasso
 LassoModel <- FinalLassoFit |> extract_workflow() |> extract_fit_parsnip()
 
 #Collecting Coefficients
@@ -432,6 +435,155 @@ LassoCo
 
 ### Regression Tree Model
 ```{r}
+#Define Tree Model
+TreeMod <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = tune()
+) |> 
+  set_engine("rpart") |> 
+  set_mode("regression")
+
+#Workflow (Recipe 1 & Regression Tree)
+WfTree <- workflow() |> add_model(TreeMod) |> add_recipe(Recipe1)
+
+#Tuning grid
+TreeGrid <- grid_regular(
+  cost_complexity(c(-5,-1)),
+  tree_depth(range = c(2L, 10L)),
+  min_n(range = c(5L, 10L)),
+  levels = c(5, 5, 5)
+)
+
+#Tuning Model
+TreeTune <- tune_grid(
+  WfTree,
+  resamples = CvFolds,
+  grid = TreeGrid,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_grid(save_pred = TRUE)
+)
+
+collect_metrics(TreeTune)
+
+#Selecting the Best Model
+BestTree <- select_best(TreeTune, metric = "rmse")
+BestTree
+
+#Finalize Workflow
+FinalTreeWf <- finalize_workflow(WfTree, BestTree)
+
+#Final Fit & Evaluate Performance
+FinalTreeFit <- last_fit(
+  FinalTreeWf,
+  DailyDataSplit,
+  metrics = metric_set(rmse, rsq, mae)
+)
+
+collect_metrics(FinalTreeFit)
+
+#Extract Final Tree
+FinalTreeModel <- FinalTreeFit |> extract_workflow() |> extract_fit_parsnip()
+
+#Plot Tree
+rpart.plot(
+  FinalTreeModel$fit, 
+  main = "Final Regression Tree Model", 
+  roundint = FALSE,
+  type = 2,
+  cex = 0.7,
+  fallen.leaves = TRUE)
+```
+
+### Bagged Tree Model
+```{r}
+#Define Bagged Tree Model
+BaggedMod <- bag_tree(
+  min_n = tune()
+) |> 
+  set_engine("rpart", times = 50) |>
+  set_mode("regression")
+
+#Workflow (Recipe 1 & Bagged Tree)
+WfBagged <- workflow() |> add_model(BaggedMod) |> add_recipe(Recipe1)
+
+#Tuning grid
+BaggedGrid <- grid_regular(
+  min_n(range = c(5L, 40L)),
+  levels = 8
+)
+
+#Tuning Model
+BaggedTune <- tune_grid(
+  WfBagged,
+  resamples = CvFolds,
+  grid = BaggedGrid,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_grid(save_pred = TRUE)
+)
+
+collect_metrics(BaggedTune)
+
+#Selecting the Best Model
+BestBagged <- select_best(BaggedTune, metric = "rmse")
+BestBagged
+
+#Finalize Workflow
+FinalBaggedWf <- finalize_workflow(WfBagged, BestBagged)
+
+#Final Fit & Evaluate Performance
+FinalBaggedFit <- last_fit(
+  FinalBaggedWf,
+  DailyDataSplit,
+  metrics = metric_set(rmse, rsq, mae)
+)
+
+#Extract Final Bagged Model 
+FinalBaggedModel <- FinalBaggedFit |> 
+  extract_workflow() |> 
+  extract_fit_parsnip()
+
+
+#Variable Important Plot
+vip(FinalBaggedModel$fit, 
+    method = "permute",
+    train = dplyr::select(TrainingProcessed, -TotalBikeCount),
+    target = TrainingProcessed$TotalBikeCount,
+    metric = "rmse",
+    pred_wrapper = function(object, newdata) {
+      predict(object, new_data = newdata)$.pred
+    },
+    num_features = 10, 
+    geom = "col")
+```
+
+### Random Forest Model
+```{r}
+#Define Forest Model
+
+
+#Workflow (Recipe 1 & Forest)
+
+
+#Tuning grid
+
+
+#Tuning Model
+
+
+#Selecting the Best Model
+
+
+#Finalize Workflow
+
+
+#Final Fit & Evaluate Performance
+
+
+#Extract Final Forest Model 
+
+
+#Variable Important Plot
 
 ```
 
