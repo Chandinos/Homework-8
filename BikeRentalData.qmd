@@ -617,3 +617,59 @@ FinalRFMod <- FinalRFFit |>
 vip(FinalRFMod$fit, num_features = 10, geom = "col")
 ```
 
+### Best MLR Fit from HW8
+```{r}
+#Best Model
+MLRFinalFit <- last_fit(
+  Wf3,
+  DailyDataSplit,
+  metrics = metric_set(rmse, rsq, mae)
+)
+collect_metrics(MLRFinalFit)
+
+#Extract Final MLR Model and Coefficient Table
+MLRFinalMod <- MLRFinalFit |>
+  extract_workflow() |>
+  extract_fit_parsnip()
+
+MLRCo <- tidy(MLRFinalMod)
+MLRCo
+```
+
+### Compare All Models on Test Set
+```{r}
+#RMSE and MAE for each Model
+MLR_Metrics <- collect_metrics(MLRFinalFit) |>
+  filter(.metric %in% c("rmse", "mae"))
+
+LASSO_Metrics <- collect_metrics(FinalLassoFit) |>
+  filter(.metric %in% c("rmse", "mae"))
+
+Tree_Metrics <- collect_metrics(FinalTreeFit) |>
+  filter(.metric %in% c("rmse", "mae"))
+
+Bagged_Metrics <- collect_metrics(FinalBaggedFit) |>
+  filter(.metric %in% c("rmse", "mae"))
+
+RF_Metrics <- collect_metrics(FinalRFFit) |>
+  filter(.metric %in% c("rmse", "mae"))
+
+Test_Metrics <- bind_rows(
+  MLR = MLR_Metrics,
+  LASSO = LASSO_Metrics,
+  RegressionTree = Tree_Metrics,
+  BaggedTree = Bagged_Metrics,
+  RandomForest = RF_Metrics,
+  .id = "Model"
+)
+
+Test_Metrics
+
+#Finding Best RMSE
+Test_Metrics |> filter(.metric == "rmse") |> arrange(.estimate)
+
+#Fitting the Best Model (BaggedTree)
+BestFit <- fit(FinalBaggedWf, data = DailyData)
+BestFit
+```
+**The Bagged Tree Model ended up providing the best model based on RMSE. It was the lowest when comparing all the models with an RMSE of 2961; all the other models had RMSE above 3000 with the Random Forest model being a close second with an RMSE of 3016**
