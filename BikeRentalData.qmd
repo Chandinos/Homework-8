@@ -177,7 +177,7 @@ In the figure above, the daily trend over time shows rentals are low in the wint
 
 ```{r}
 #Holiday vs Non-Holiday Bike Rentals
-ggplot(DailyData, aes(x = Holiday, y = TotalBikeCount, fill = Holiday)) + geom_boxplot(aplha = 0.5) +
+ggplot(DailyData, aes(x = Holiday, y = TotalBikeCount, fill = Holiday)) + geom_boxplot(alpha = 0.5) +
   labs(title = "Holiday vs Non-Holiday Bike Rentals",
        x = "Holiday Status",
        y = "Total Daily Bike Rentals")
@@ -559,31 +559,61 @@ vip(FinalBaggedModel$fit,
 
 ### Random Forest Model
 ```{r}
-#Define Forest Model
+#Number of Predictors (for mtry)
+p <- ncol(dplyr::select(TrainingProcessed, -TotalBikeCount))
 
+#Define Forest Model
+RFMod <- rand_forest(
+  mtry = tune(),
+  min_n = tune(),
+  trees = 1000
+) |>
+  set_engine("ranger", importance = "impurity") |>
+  set_mode("regression")
 
 #Workflow (Recipe 1 & Forest)
-
+WfRF <- workflow() |> add_model(RFMod) |> add_recipe(Recipe1)
 
 #Tuning grid
-
+RFGrid <- grid_regular(
+  mtry(range = c(2L, max(3L, floor(p/2)))),
+  min_n(range = c(5L, 40L)),
+  levels = c(5,5)
+)
 
 #Tuning Model
+RFTune <- tune_grid(
+  WfRF,
+  resamples = CvFolds,
+  grid = RFGrid,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_grid(save_pred = TRUE)
+)
 
+collect_metrics(RFTune)
 
 #Selecting the Best Model
-
+BestRF <- select_best(RFTune, metric = "rmse")
+BestRF
 
 #Finalize Workflow
-
+FinalRFWf <- finalize_workflow(WfRF, BestRF)
 
 #Final Fit & Evaluate Performance
+FinalRFFit <- last_fit(
+  FinalRFWf,
+  DailyDataSplit,
+  metrics = metric_set(rmse, rsq, mae)
+)
 
+collect_metrics(FinalRFFit)
 
 #Extract Final Forest Model 
-
+FinalRFMod <- FinalRFFit |> 
+  extract_workflow() |>
+  extract_fit_parsnip()
 
 #Variable Important Plot
-
+vip(FinalRFMod$fit, num_features = 10, geom = "col")
 ```
 
